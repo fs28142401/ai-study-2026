@@ -1,0 +1,20 @@
+{
+  "be_an": {
+    "day1": {
+      "status": "assigned",
+      "assigned_date": "2026-05-27"
+    }
+  },
+  "be_minh": {
+    "day1": {
+      "status": "assigned",
+      "assigned_date": "2026-05-27"
+    }
+  },
+  "q": {
+    "day1": {
+      "status": "assigned",
+      "assigned_date": "2026-05-27"
+    }
+  }
+}
