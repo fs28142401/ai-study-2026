@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 import streamlit as st
 import sqlite3
 import os
@@ -527,4 +527,4 @@ else:
         for _, row in notes.iterrows():
             st.caption(row['created_at'])
             st.write(row['note_text'])
->>>>>>> 78fe967d10f9887e0ac8b5ec8e6a1b149ba7cced
+
