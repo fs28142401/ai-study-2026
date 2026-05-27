@@ -1,3 +1,288 @@
+<<<<<<< HEAD
+import streamlit as st
+import sqlite3
+import os
+from datetime import datetime
+import pandas as pd
+
+# ====================== CẤU HÌNH ======================
+st.set_page_config(page_title="AI Study 2026", layout="wide", page_icon="🎓")
+
+BASE_ROOT = os.path.dirname(os.path.abspath(__file__))
+SUBJECTS_ROOT = os.path.join(BASE_ROOT, "Lession")
+
+# ====================== DATABASE ======================
+def init_db(db_path):
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS students (
+                    id TEXT PRIMARY KEY,
+                    nickname TEXT,
+                    full_name TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS progress (
+                    student_id TEXT,
+                    day_key TEXT,
+                    status TEXT,
+                    assigned_date TEXT,
+                    completed_date TEXT,
+                    submission TEXT,
+                    notebooklm_link TEXT,
+                    PRIMARY KEY (student_id, day_key))''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id TEXT,
+                    note_text TEXT,
+                    created_at TEXT)''')
+    
+    conn.commit()
+    return conn
+
+# ====================== HỖ TRỢ BÀI HỌC ======================
+def get_subject_dirs():
+    if not os.path.exists(SUBJECTS_ROOT):
+        return []
+    return sorted([d for d in os.listdir(SUBJECTS_ROOT) 
+                   if os.path.isdir(os.path.join(SUBJECTS_ROOT, d))])
+
+def format_subject_name(subject_dir):
+    label = subject_dir.replace("_2026", "").replace("_", " ").strip()
+    return label.title() if label else subject_dir
+
+def get_subject_paths(subject_dir):
+    base_dir = os.path.join(SUBJECTS_ROOT, subject_dir)
+    data_dir = os.path.join(base_dir, "data")
+    roadmap_dir = os.path.join(data_dir, "roadmap")
+    os.makedirs(roadmap_dir, exist_ok=True)
+    return base_dir, data_dir, roadmap_dir
+
+def get_roadmap_days(roadmap_dir):
+    if not os.path.exists(roadmap_dir):
+        return []
+    days = [f for f in os.listdir(roadmap_dir) if f.lower().endswith('.md')]
+    def sort_key(x):
+        num = ''.join(filter(str.isdigit, x))
+        return (int(num) if num else 0, x)
+    days_sorted = sorted(days, key=sort_key)
+    return [os.path.splitext(day)[0] for day in days_sorted]
+
+def load_lesson_content(roadmap_dir, day_key):
+    lesson_file = os.path.join(roadmap_dir, f"{day_key}.md")
+    if os.path.exists(lesson_file):
+        with open(lesson_file, 'r', encoding='utf-8') as f:
+            return f.read()
+    return None
+
+def get_lesson_title(content):
+    if not content:
+        return "Không có tiêu đề"
+    lines = content.strip().split('\n')
+    for line in lines[:10]:
+        cleaned = line.strip()
+        if cleaned:
+            if cleaned.startswith('#'):
+                return cleaned.lstrip('#').strip()[:100]
+            else:
+                return cleaned[:100]
+    return "Bài học không có tiêu đề"
+
+# ====================== MAIN APP ======================
+subjects = get_subject_dirs()
+if not subjects:
+    st.error("Không tìm thấy thư mục 'Lession'. Vui lòng tạo thư mục và push lên GitHub.")
+    st.stop()
+
+st.sidebar.title("📚 Môn học")
+subject = st.sidebar.selectbox(
+    "Chọn môn học",
+    subjects,
+    format_func=format_subject_name
+)
+
+BASE_DIR, DATA_DIR, ROADMAP_DIR = get_subject_paths(subject)
+DB_PATH = os.path.join(DATA_DIR, "study.db")
+conn = init_db(DB_PATH)
+
+available_lesson_days = get_roadmap_days(ROADMAP_DIR)
+
+st.title("🎓 AI Study 2026")
+st.subheader(f"Môn học: {format_subject_name(subject)}")
+
+# ====================== ADMIN / STUDENT ======================
+st.sidebar.header("🔑 Vai trò")
+mode = st.sidebar.radio("", ["👨 Bố (Admin)", "👦 Bé (Student)"], label_visibility="collapsed")
+
+ADMIN_PASSWORD = "123456"  # ← THAY BẰNG MẬT KHẨU MẠNH CỦA BẠN
+
+if mode == "👨 Bố (Admin)":
+    password = st.sidebar.text_input("Nhập mật khẩu Admin", type="password")
+    if password != ADMIN_PASSWORD:
+        st.warning("🔒 Vui lòng nhập đúng mật khẩu Admin")
+        st.stop()
+    
+    st.header("🔧 Admin Dashboard")
+    tab1, tab2, tab3 = st.tabs(["📊 Tổng quan", "👥 Quản lý Bé", "📚 Giao Bài"])
+
+    with tab1:
+        st.subheader("Tổng quan tiến độ")
+        df = pd.read_sql_query("""
+            SELECT s.nickname, 
+                   COUNT(CASE WHEN p.status = 'completed' THEN 1 END) as completed,
+                   COUNT(p.day_key) as assigned
+            FROM students s 
+            LEFT JOIN progress p ON s.id = p.student_id
+            GROUP BY s.id, s.nickname
+        """, conn)
+        st.dataframe(df, use_container_width=True)
+
+    with tab2:
+        st.subheader("Quản lý Bé")
+        col1, col2 = st.columns(2)
+        with col1:
+            new_nick = st.text_input("Nickname mới")
+        with col2:
+            new_full = st.text_input("Tên đầy đủ")
+        if st.button("➕ Thêm bé"):
+            if new_nick and new_full:
+                sid = new_nick.lower().replace(" ", "_")
+                conn.execute("INSERT OR IGNORE INTO students VALUES (?, ?, ?)", 
+                           (sid, new_nick, new_full))
+                conn.commit()
+                st.success(f"✅ Đã thêm {new_nick}")
+        
+        students_df = pd.read_sql_query("SELECT * FROM students", conn)
+        st.dataframe(students_df, use_container_width=True)
+
+    with tab3:
+        st.subheader("📚 Giao Bài Học")
+        if available_lesson_days:
+            day = st.selectbox("Chọn bài muốn giao", 
+                             available_lesson_days,
+                             format_func=lambda x: x.replace("day", "Ngày "))
+            
+            content = load_lesson_content(ROADMAP_DIR, day)
+            title = get_lesson_title(content)
+            
+            st.markdown(f"**Tiêu đề bài:** {title}")
+            with st.expander("👁️ Xem trước nội dung bài học", expanded=False):
+                st.markdown(content if content else "Không tìm thấy nội dung")
+            
+            students_list = pd.read_sql_query("SELECT id, nickname FROM students", conn)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🚀 Giao cho TẤT CẢ bé", type="primary"):
+                    for sid in students_list['id']:
+                        conn.execute("""INSERT OR REPLACE INTO progress 
+                                      (student_id, day_key, status, assigned_date)
+                                      VALUES (?, ?, 'assigned', ?)""",
+                                   (sid, day, datetime.now().strftime("%Y-%m-%d")))
+                    conn.commit()
+                    st.success(f"✅ Đã giao **{day}** cho tất cả bé!")
+            
+            with col2:
+                if not students_list.empty:
+                    selected_sid = st.selectbox("Giao cho bé cụ thể", 
+                                              students_list['id'],
+                                              format_func=lambda x: students_list[students_list['id']==x]['nickname'].values[0])
+                    if st.button("Giao cho bé này"):
+                        conn.execute("""INSERT OR REPLACE INTO progress 
+                                      (student_id, day_key, status, assigned_date)
+                                      VALUES (?, ?, 'assigned', ?)""",
+                                   (selected_sid, day, datetime.now().strftime("%Y-%m-%d")))
+                        conn.commit()
+                        st.success(f"✅ Đã giao **{day}** cho bé!")
+        else:
+            st.warning("Chưa có bài học nào. Hãy thêm file .md vào thư mục `Lession/[Môn]/data/roadmap/`")
+
+else:  # ====================== STUDENT MODE ======================
+    st.header("👦 Student Dashboard")
+    students = pd.read_sql_query("SELECT id, nickname FROM students", conn)
+    
+    if students.empty:
+        st.warning("Chưa có bé nào được thêm. Bố vào phần Admin thêm bé trước.")
+        st.stop()
+    
+    selected_sid = st.selectbox("Chọn bé", students['id'], 
+                              format_func=lambda x: students[students['id']==x]['nickname'].values[0])
+    
+    student_name = students[students['id']==selected_sid]['nickname'].values[0]
+    st.subheader(f"Xin chào {student_name} 👋")
+
+    # Tiến độ
+    progress_df = pd.read_sql_query("""
+        SELECT day_key as "Ngày", status as "Trạng thái", 
+               assigned_date as "Giao ngày", completed_date as "Hoàn thành ngày"
+        FROM progress WHERE student_id = ? 
+        ORDER BY day_key
+    """, conn, params=(selected_sid,))
+    
+    if not progress_df.empty:
+        st.dataframe(progress_df, use_container_width=True)
+    else:
+        st.info("Chưa có bài nào được giao.")
+
+    # Học và nộp bài
+    if not progress_df.empty:
+        assigned_days = progress_df['Ngày'].tolist()
+        selected_day = st.selectbox("📖 Chọn bài học", assigned_days, 
+                                  format_func=lambda x: x.replace("day", "Ngày "))
+        
+        lesson_content = load_lesson_content(ROADMAP_DIR, selected_day)
+        if lesson_content:
+            st.markdown("---")
+            st.subheader(f"Bài học {selected_day.replace('day', 'Ngày ')}")
+            st.markdown(lesson_content)
+        
+        st.subheader("📤 Nộp bài tập")
+        submission = st.text_area("Dán code Python hoặc câu trả lời của con", height=250)
+        notebook_link = st.text_input("🔗 Dán link NotebookLM (nếu có)")
+        
+        uploaded_file = st.file_uploader("Upload file (.py, .ipynb, ảnh...)", 
+                                       type=['py', 'ipynb', 'png', 'jpg', 'jpeg'])
+        
+        if st.button("✅ Hoàn thành & Nộp bài"):
+            file_path = None
+            if uploaded_file:
+                uploads_dir = os.path.join(DATA_DIR, "uploads")
+                os.makedirs(uploads_dir, exist_ok=True)
+                file_path = os.path.join(uploads_dir, f"{selected_sid}_{selected_day}_{uploaded_file.name}")
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+            
+            conn.execute("""INSERT OR REPLACE INTO progress 
+                          (student_id, day_key, status, completed_date, submission, notebooklm_link)
+                          VALUES (?, ?, 'completed', ?, ?, ?)""",
+                       (selected_sid, selected_day, datetime.now().strftime("%Y-%m-%d"), 
+                        submission, notebook_link))
+            conn.commit()
+            st.success("🎉 Con đã hoàn thành và nộp bài thành công!")
+
+    # Ghi chú
+    st.subheader("📝 Ghi chú cá nhân")
+    note = st.text_area("Viết ghi chú hôm nay")
+    if st.button("Lưu ghi chú"):
+        if note.strip():
+            conn.execute("INSERT INTO notes (student_id, note_text, created_at) VALUES (?, ?, ?)",
+                        (selected_sid, note, datetime.now().strftime("%Y-%m-%d %H:%M")))
+            conn.commit()
+            st.success("✅ Đã lưu ghi chú")
+
+    # Hiển thị ghi chú
+    notes = pd.read_sql_query("""
+        SELECT created_at, note_text 
+        FROM notes WHERE student_id = ? 
+        ORDER BY created_at DESC LIMIT 5
+    """, conn, params=(selected_sid,))
+    if not notes.empty:
+        st.markdown("---")
+        st.subheader("Ghi chú gần đây")
+        for _, row in notes.iterrows():
+            st.caption(row['created_at'])
+            st.write(row['note_text'])
+=======
 import streamlit as st
 import sqlite3
 import os
@@ -242,3 +527,4 @@ else:
         for _, row in notes.iterrows():
             st.caption(row['created_at'])
             st.write(row['note_text'])
+>>>>>>> 78fe967d10f9887e0ac8b5ec8e6a1b149ba7cced
