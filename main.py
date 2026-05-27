@@ -107,18 +107,18 @@ st.subheader(f"Môn học: {format_subject_name(subject)}")
 
 # ====================== ADMIN / STUDENT ======================
 st.sidebar.header("🔑 Vai trò")
-mode = st.sidebar.radio("", ["👨 Bố (Admin)", "👦 Bé (Student)"], label_visibility="collapsed")
+mode = st.sidebar.radio("", ["👨  (Admin)", "👦  (Student)"], label_visibility="collapsed")
 
 ADMIN_PASSWORD = "123456"  # ← Đổi thành mật khẩu mạnh của bạn
 
-if mode == "👨 Bố (Admin)":
+if mode == "👨  (Admin)":
     password = st.sidebar.text_input("Nhập mật khẩu Admin", type="password")
     if password != ADMIN_PASSWORD:
         st.warning("🔒 Vui lòng nhập đúng mật khẩu Admin")
         st.stop()
     
     st.header("🔧 Admin Dashboard")
-    tab1, tab2, tab3 = st.tabs(["📊 Tổng quan", "👥 Quản lý Bé", "📚 Giao Bài"])
+    tab1, tab2, tab3 = st.tabs(["📊 Tổng quan", "👥 Quản lý Student", "📚 Giao Bài"])
 
     with tab1:
         st.subheader("Tổng quan tiến độ")
