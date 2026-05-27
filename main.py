@@ -100,11 +100,11 @@ st.subheader(f"Môn học: {format_subject_name(subject)}")
 
 # ====================== PASSWORD ADMIN ======================
 st.sidebar.header("🔑 Vai trò")
-mode = st.sidebar.radio("", ["👨 Bố (Admin)", "👦 Bé (Student)"], label_visibility="collapsed")
+mode = st.sidebar.radio("", ["👨 (Admin)", "👦 (Student)"], label_visibility="collapsed")
 
 ADMIN_PASSWORD = "123456"  # ← Bạn đổi password này thành cái mạnh hơn
 
-if mode == "👨 Bố (Admin)":
+if mode == "👨 (Admin)":
     password = st.sidebar.text_input("Nhập mật khẩu Admin", type="password")
     if password != ADMIN_PASSWORD:
         st.warning("🔒 Vui lòng nhập đúng mật khẩu để vào phần Admin")
